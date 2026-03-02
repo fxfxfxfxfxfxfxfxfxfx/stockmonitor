@@ -2,7 +2,6 @@ import os
 import requests
 import pandas as pd
 import numpy as np
-from bs4 import BeautifulSoup
 import streamlit as st
 import re
 
@@ -25,14 +24,13 @@ def load_stock_list():
             break
 
         df['시가총액(억)'] = df['시가총액'].astype(str).str.replace(',', '').astype(float)
-
-        soup = BeautifulSoup(html, 'lxml')
+        
+        # 코드 추출 (BeautifulSoup 없이 정규식으로)
         code_map = {}
-        for a in soup.select('a.tltle'):
-            name = a.text.strip()
-            m = re.search(r'code=(\d+)', a['href'])
-            if m:
-                code_map[name] = m.group(1)
+        code_pattern = r'href="([^"]*code=(\d+)[^"]*)"[^>]*>([^<]+)<'
+        matches = re.findall(code_pattern, html)
+        for url, code, name in matches:
+            code_map[name.strip()] = code
 
         for _, row in df.iterrows():
             if row['시가총액(억)'] >= 10000 and row['종목명'] in code_map:
@@ -45,6 +43,8 @@ def load_stock_list():
                 })
 
         page += 1
+        if page > 10:  # 무한루프 방지
+            break
 
     return stock_list
 
@@ -200,11 +200,9 @@ def main():
             if results:
                 df = pd.DataFrame(results)
                 
-                # 원본 테이블
                 st.subheader("📋 필터링 결과")
                 st.dataframe(df, use_container_width=True)
                 
-                # 네이버 차트 링크 테이블
                 st.subheader("📈 네이버 차트 바로가기")
                 df_link = df.copy()
                 df_link["네이버차트"] = df_link["네이버차트"].apply(
@@ -212,7 +210,6 @@ def main():
                 )
                 st.markdown(df_link[['종목코드', '종목명', '현재가', '네이버차트']].to_html(escape=False, index=False), unsafe_allow_html=True)
                 
-                # CSV 다운로드
                 csv = df.to_csv(index=False, encoding='utf-8-sig')
                 st.download_button(
                     label="💾 CSV 다운로드",
@@ -225,3 +222,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
